@@ -12,7 +12,7 @@ import asyncio, logging, sys, time
 from telegram import Update
 from telegram.ext import Application, ContextTypes
 
-import alerts, ais, config, db, handlers
+import alerts, ais, config, db, handlers, water
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
@@ -29,6 +29,7 @@ async def on_startup(app: Application) -> None:
     tasks = ais.start()
     if tasks:
         log.info("دیده‌بان AIS روشن شد (%d منبع داده).", len(tasks))
+    water.start(app)
     me = await app.bot.get_me()
     log.info("ربات @%s آماده است ✅", me.username)
 
@@ -68,6 +69,8 @@ def main() -> None:
     while True:
         try:
             app = build_app()
+            # حلقه رویداد تازه برای هر تلاش — run_polling قبلی حلقه‌اش را بسته است
+            asyncio.set_event_loop(asyncio.new_event_loop())
             log.info("در حال اتصال به تلگرام...")
             app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
             log.info("حلقه polling پایان یافت — راه‌اندازی مجدد در ۱۰ ثانیه...")

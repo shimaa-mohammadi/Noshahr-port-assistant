@@ -52,6 +52,7 @@ def main_kb(role: str, user=None) -> InlineKeyboardMarkup:
         btns += [
             InlineKeyboardButton("🚢 شناورهای اطراف بندر", callback_data="ais:list"),
             InlineKeyboardButton("🛟 پنجره هوایی عملیات", callback_data="wx:window"),
+            InlineKeyboardButton("🌊 تراز آب بندر", callback_data="water:status"),
             InlineKeyboardButton("🏗 وضعیت اسکله‌ها", callback_data="guide:berths"),
             InlineKeyboardButton("🔔 هشدار ورود شناور", callback_data="alert:ais"),
         ]
@@ -67,6 +68,7 @@ def main_kb(role: str, user=None) -> InlineKeyboardMarkup:
     elif role == "org":
         btns += [
             InlineKeyboardButton("🚢 شناورهای اطراف بندر", callback_data="ais:list"),
+            InlineKeyboardButton("🌊 تراز آب بندر", callback_data="water:status"),
             InlineKeyboardButton("📊 آمار تردد شناورها", callback_data="stats"),
         ]
 
@@ -121,4 +123,16 @@ def admin_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("❌ حذف آخرین اطلاعیه", callback_data="admin:dellast")],
         [InlineKeyboardButton("📊 تعداد کاربران", callback_data="admin:users")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="menu")],
+    ])
+
+
+def water_kb(chat_id: int) -> InlineKeyboardMarkup:
+    """منوی پایش تراز آب: اشتراک هشدار افت + بازگشت"""
+    import db
+    sub = db.water_is_subscribed(chat_id)
+    toggle = ("🔔 خاموش‌کردن هشدار افت آبخور" if sub
+              else "🔔 روشن‌کردن هشدار افت آبخور")
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(toggle, callback_data="water:alert")],
+        [InlineKeyboardButton("🔙 بازگشت به منو", callback_data="menu")],
     ])

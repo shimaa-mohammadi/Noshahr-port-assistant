@@ -204,6 +204,22 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show("\n".join(lines))
         return
 
+    # ── پایش تراز آب ──
+    if data == "water:status":
+        import water
+        await show(water.build_status_report(), keyboards.water_kb(q.from_user.id))
+        return
+
+    if data == "water:alert":
+        import water
+        on = not db.water_is_subscribed(q.from_user.id)
+        db.water_subscribe(q.from_user.id, on)
+        note = ("🔔 هشدار افت آبخور <b>روشن شد</b> — اگر افت ۲۴ ساعته از آستانه بگذرد، "
+                "پیام می‌گیری.\n" if on else "🔕 هشدار افت آبخور خاموش شد.\n")
+        await show(note + "\n" + water.build_status_report(),
+                   keyboards.water_kb(q.from_user.id))
+        return
+
     if data == "stats":
         n24 = db.count_vessels_last_hours(24)
         nz = db.count_vessels_in_zone()

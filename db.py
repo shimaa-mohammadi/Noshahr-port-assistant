@@ -39,6 +39,25 @@ def init_db() -> None:
             in_zone INTEGER DEFAULT 0,
             first_seen REAL, last_seen REAL
         );
+        CREATE TABLE IF NOT EXISTS water_levels(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id TEXT,
+            level_mm REAL,          -- تراز آب نسبت به مبنا ایستگاه (میلی‌متر)
+            raw_dist_mm REAL,       -- فاصله خام سنسور تا سطح آب
+            temp_c REAL,            -- دمای هوا برای تصحیح سرعت صوت
+            ts REAL
+        );
+        CREATE INDEX IF NOT EXISTS idx_water_dev_ts ON water_levels(device_id, ts);
+        CREATE TABLE IF NOT EXISTS water_devices(
+            device_id TEXT PRIMARY KEY,
+            label TEXT DEFAULT '',
+            datum_mm REAL DEFAULT 0,   -- ارتفاع سطح سنسور بالای مبنای هیدروگرافی (mm)
+            last_seen REAL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS water_alerts(
+            chat_id INTEGER PRIMARY KEY,
+            last_alert REAL DEFAULT 0
+        );
         """
     )
     _conn.commit()
@@ -143,3 +162,73 @@ def top_recent_vessels(limit: int = 15):
     return _exec(
         "SELECT name,mmsi,dist_km,sog,in_zone,last_seen FROM vessels "
         "ORDER BY last_seen DESC LIMIT ?", (limit,), fetch=True)
+
+
+# ─────────────── پایش تراز آب ───────────────
+def upsert_water_device(device_id: str, label: str = "", datum_mm: float = 0.0):
+    _exec(
+        "INSERT INTO water_devices(device_id,label,datum_mm,last_seen) VALUES(?,?,?,?) "
+        "ON CONFLICT(device_id) DO UPDATE SET label=?, datum_mm=?, last_seen=?",
+        (device_id, label, datum_mm, time.time(), label, datum_mm, time.time()),
+    )
+
+
+def get_water_device(device_id: str):
+    rows = _exec("SELECT * FROM water_devices WHERE device_id=?", (device_id,), fetch=True)
+    return rows[0] if rows else None
+
+
+def insert_water_reading(device_id: str, level_mm: float, raw_dist_mm: float, temp_c):
+    _exec(
+        "INSERT INTO water_levels(device_id,level_mm,raw_dist_mm,temp_c,ts) VALUES(?,?,?,?,?)",
+        (device_id, level_mm, raw_dist_mm, temp_c, time.time()),
+    )
+
+
+def water_stats(device_id: str):
+    """آمار ۲۴ ساعت اخیر یک ایستگاه: فعلی، بیشینه، کمینه، تغییر، تعداد نمونه"""
+    since = time.time() - 24 * 3600
+    rows = _exec(
+        "SELECT level_mm, temp_c, ts FROM water_levels "
+        "WHERE device_id=? AND ts>=? ORDER BY ts ASC", (device_id, since), fetch=True)
+    if not rows:
+        return None
+    levels = [r["level_mm"] for r in rows]
+    first, last = rows[0], rows[-1]
+    return {
+        "current": last["level_mm"],
+        "temp": last["temp_c"],
+        "min": min(levels),
+        "max": max(levels),
+        "change_24h": last["level_mm"] - first["level_mm"],
+        "count": len(rows),
+        "last_seen": last["ts"],
+        "span_hours": (last["ts"] - first["ts"]) / 3600.0 or 0.0,
+    }
+
+
+def water_drop_24h(device_id: str) -> float:
+    s = water_stats(device_id)
+    return -s["change_24h"] if s else 0.0   # مثبت = افت
+
+
+# ── مشترکین هشدار آبخور ──
+def water_subscribe(chat_id: int, on: bool):
+    if on:
+        _exec("INSERT INTO water_alerts(chat_id,last_alert) VALUES(?,0) "
+              "ON CONFLICT(chat_id) DO NOTHING", (chat_id,))
+    else:
+        _exec("DELETE FROM water_alerts WHERE chat_id=?", (chat_id,))
+
+
+def water_is_subscribed(chat_id: int) -> bool:
+    rows = _exec("SELECT chat_id FROM water_alerts WHERE chat_id=?", (chat_id,), fetch=True)
+    return bool(rows)
+
+
+def water_subs():
+    return _exec("SELECT chat_id, last_alert FROM water_alerts", fetch=True)
+
+
+def water_mark_alert(chat_id: int):
+    _exec("UPDATE water_alerts SET last_alert=? WHERE chat_id=?", (time.time(), chat_id))

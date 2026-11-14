@@ -25,6 +25,7 @@ def role_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton("🎣 ماهیگیر / صیاد", callback_data="role:fisher"),
         InlineKeyboardButton("🏖 گردشگر / عموم", callback_data="role:tourist"),
         InlineKeyboardButton("🏢 سازمانی / پژوهشگر", callback_data="role:org"),
+        InlineKeyboardButton("👷 کارمند بندر", callback_data="role:staff"),
     ]
     return InlineKeyboardMarkup([[b] for b in btns])
 
@@ -65,6 +66,13 @@ def main_kb(role: str, user=None) -> InlineKeyboardMarkup:
         btns += [
             InlineKeyboardButton("🏖 اطلاعات ساحل و شنا", callback_data="tour:beach"),
         ]
+    elif role == "staff":
+        btns += [
+            InlineKeyboardButton("🌊 تراز آب بندر", callback_data="water:status"),
+            InlineKeyboardButton("🚢 شناورهای اطراف بندر", callback_data="ais:list"),
+            InlineKeyboardButton("🔐 پنل کارکنان (نمونه)", callback_data="staff:login"),
+            InlineKeyboardButton("🔔 گواهینامه‌های من", callback_data="cert:list"),
+        ]
     elif role == "org":
         btns += [
             InlineKeyboardButton("🚢 شناورهای اطراف بندر", callback_data="ais:list"),
@@ -74,7 +82,7 @@ def main_kb(role: str, user=None) -> InlineKeyboardMarkup:
 
     # تنظیمات پایین منو
     settings = []
-    if role in ("agent", "fisher", "driver"):
+    if role in ("agent", "fisher", "driver", "staff"):
         settings.append(InlineKeyboardButton("⚙️ هشدارها و تنظیمات", callback_data="alerts"))
     settings.append(InlineKeyboardButton("🔄 تغییر نوع کاربر", callback_data="chrole"))
 
@@ -136,3 +144,43 @@ def water_kb(chat_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(toggle, callback_data="water:alert")],
         [InlineKeyboardButton("🔙 بازگشت به منو", callback_data="menu")],
     ])
+
+
+# ─────────────── گواهینامه‌ها ───────────────
+def cert_kb(chat_id: int) -> InlineKeyboardMarkup:
+    import db
+    rows = []
+    for c in db.get_certificates(chat_id):
+        rows.append([InlineKeyboardButton(
+            f"🗑 {c['title']} ({c['date_str']})",
+            callback_data=f"cert:del:{c['id']}")])
+    rows.append([InlineKeyboardButton("➕ افزودن گواهینامه",
+                                      callback_data="cert:add")])
+    rows.append([InlineKeyboardButton("🔙 بازگشت به منو", callback_data="menu")])
+    return InlineKeyboardMarkup(rows)
+
+
+# ─────────────── دموی پنل کارکنان ───────────────
+def demo_home_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🧾 فیش حقوقی", callback_data="staff:payslip")],
+        [InlineKeyboardButton("⏱ اضافه‌کاری", callback_data="staff:overtime"),
+         InlineKeyboardButton("📅 مرخصی‌ها", callback_data="staff:leave")],
+        [InlineKeyboardButton("📬 ابلاغیه‌ها", callback_data="staff:memos")],
+        [InlineKeyboardButton("🚪 خروج", callback_data="staff:logout")],
+    ])
+
+
+def demo_payslip_kb(ym_list, ym: str) -> InlineKeyboardMarkup:
+    """ناوبری ماه‌های فیش: ◀️ قدیمی‌تر | جدیدتر ▶️"""
+    i = ym_list.index(ym) if ym in ym_list else 0
+    row = []
+    if i + 1 < len(ym_list):   # ماه‌های قدیمی‌تر انتهای لیست‌اند
+        row.append(InlineKeyboardButton("◀️ ماه قبل",
+                                        callback_data=f"staff:payslip:{ym_list[i+1]}"))
+    if i > 0:
+        row.append(InlineKeyboardButton("ماه بعد ▶️",
+                                        callback_data=f"staff:payslip:{ym_list[i-1]}"))
+    rows = [row] if row else []
+    rows.append([InlineKeyboardButton("🔙 بازگشت", callback_data="staff:home")])
+    return InlineKeyboardMarkup(rows)

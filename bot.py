@@ -12,7 +12,7 @@ import asyncio, logging, sys, time
 from telegram import Update
 from telegram.ext import Application, ContextTypes
 
-import alerts, ais, config, db, handlers, water
+import alerts, ais, certs, config, db, demo, handlers, water
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
@@ -26,6 +26,8 @@ async def on_startup(app: Application) -> None:
     """پس از اتصال به تلگرام: دیده‌بان AIS و هشدارها را روشن کن"""
     db.init_db()
     alerts.setup(app)
+    demo.seed_if_empty()          # داده نمونه پنل کارکنان (در صورت نبود)
+    certs.setup(app)              # یادآور روزانه گواهینامه‌ها
     tasks = ais.start()
     if tasks:
         log.info("دیده‌بان AIS روشن شد (%d منبع داده).", len(tasks))

@@ -58,6 +58,34 @@ def init_db() -> None:
             chat_id INTEGER PRIMARY KEY,
             last_alert REAL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS certificates(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id INTEGER,
+            title TEXT,
+            expiry_ts REAL,
+            date_str TEXT DEFAULT '',      -- همان که کاربر وارد کرد (برای نمایش)
+            created_at REAL,
+            last_alert_days INTEGER DEFAULT 999
+        );
+        CREATE INDEX IF NOT EXISTS idx_certs_chat ON certificates(chat_id);
+        CREATE TABLE IF NOT EXISTS demo_employees(
+            code TEXT PRIMARY KEY,
+            name TEXT, unit TEXT,
+            pin_hash TEXT, salt TEXT
+        );
+        CREATE TABLE IF NOT EXISTS demo_payslips(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT, ym TEXT,            -- مثل "1405-08"
+            base REAL, overtime_pay REAL, allowance REAL,
+            deduction REAL, net REAL, overtime_hours REAL
+        );
+        CREATE TABLE IF NOT EXISTS demo_leaves(
+            code TEXT, leave_type TEXT, total REAL, used REAL
+        );
+        CREATE TABLE IF NOT EXISTS demo_memos(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT, title TEXT, body TEXT, ts REAL
+        );
         """
     )
     _conn.commit()
@@ -232,3 +260,59 @@ def water_subs():
 
 def water_mark_alert(chat_id: int):
     _exec("UPDATE water_alerts SET last_alert=? WHERE chat_id=?", (time.time(), chat_id))
+
+
+# ─────────────── گواهینامه‌ها ───────────────
+def add_certificate(chat_id: int, title: str, expiry_ts: float, date_str: str):
+    _exec("INSERT INTO certificates(chat_id,title,expiry_ts,date_str,created_at) "
+          "VALUES(?,?,?,?,?)", (chat_id, title, expiry_ts, date_str, time.time()))
+
+
+def get_certificates(chat_id: int):
+    return _exec("SELECT * FROM certificates WHERE chat_id=? ORDER BY expiry_ts ASC",
+                 (chat_id,), fetch=True)
+
+
+def get_certificate(cert_id: int, chat_id: int):
+    rows = _exec("SELECT * FROM certificates WHERE id=? AND chat_id=?",
+                 (cert_id, chat_id), fetch=True)
+    return rows[0] if rows else None
+
+
+def delete_certificate(cert_id: int, chat_id: int):
+    _exec("DELETE FROM certificates WHERE id=? AND chat_id=?", (cert_id, chat_id))
+
+
+def set_cert_alerted(cert_id: int, days: int):
+    _exec("UPDATE certificates SET last_alert_days=? WHERE id=?", (days, cert_id))
+
+
+def all_certificates():
+    return _exec("SELECT * FROM certificates", fetch=True)
+
+
+# ─────────────── دموی پنل کارکنان ───────────────
+def get_demo_employee(code: str):
+    rows = _exec("SELECT * FROM demo_employees WHERE code=?", (code,), fetch=True)
+    return rows[0] if rows else None
+
+
+def demo_payslip_ym_list(code: str):
+    return [r["ym"] for r in _exec(
+        "SELECT DISTINCT ym FROM demo_payslips WHERE code=? ORDER BY ym DESC",
+        (code,), fetch=True)]
+
+
+def demo_payslip(code: str, ym: str):
+    rows = _exec("SELECT * FROM demo_payslips WHERE code=? AND ym=?",
+                 (code, ym), fetch=True)
+    return rows[0] if rows else None
+
+
+def demo_leaves(code: str):
+    return _exec("SELECT * FROM demo_leaves WHERE code=?", (code,), fetch=True)
+
+
+def demo_memos(code: str):
+    return _exec("SELECT * FROM demo_memos WHERE code=? ORDER BY ts DESC",
+                 (code,), fetch=True)
